@@ -7,4 +7,4 @@ Shows a spectator list so you can see who's watching. All players in game must h
 
 ## Other Info
 
-Uses chat filtering to pass the spectating messages back and forth and displays using carry weight display, not really the most ideal way to go about it but it seemed like a funny way of doing it.
+Uses chat filtering to pass the spectating messages back and forth, not really the most ideal way to go about it but it seemed like a funny way of doing it.
