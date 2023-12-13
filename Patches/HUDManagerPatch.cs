@@ -12,6 +12,7 @@ using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading.Tasks;
 using System.Web;
+using TMPro;
 using Unity.Netcode;
 using Unity.Networking.Transport.Error;
 using UnityEngine;
@@ -24,7 +25,7 @@ namespace Spectators.Patches
     internal class HUDManagerPatch
     {
         // Spectator Box UI Text Element
-        public static UnityEngine.UI.Text specBox;
+        private static TextMeshProUGUI specBox;
         // Last Spectated Player ID
         public static int lastPlayerID = -100;
         // Spectators
@@ -34,9 +35,9 @@ namespace Spectators.Patches
         // Stopped Watching Key
         public const string key2 = "stoppedwatching69";
         // Spectators Header Color
-        public const string headerColor = "#00d4ad";
+        public static string headerColor = "#e36d19";
         // Spectators Name Color
-        public static string specColor = "#0069e0";
+        public static string specColor = "#3d52a1";
         // HUDManager Instance
         public static HUDManager hud = HUDManager.Instance;
         public static ManualLogSource mls = BepInEx.Logging.Logger.CreateLogSource(" SpectatorDebug");
@@ -48,6 +49,7 @@ namespace Spectators.Patches
         {
             string localPlayer = hud.playersManager.localPlayerController.playerUsername;
             int playerId = -10; ;
+            // Get playerUsername from playerId
             for (int i = 0; i < hud.playersManager.allPlayerScripts.Length; i++)
             {
                 if (hud.playersManager.allPlayerScripts[i].playerUsername == playerScript.playerUsername)
@@ -61,6 +63,7 @@ namespace Spectators.Patches
             }
             else
             {
+                // Send Start and Stop spectating commands
                 if (lastPlayerID != -100)
                 {
                     mls.LogInfo("Sending Spec Stop to :" + playerScript.playerUsername);
@@ -78,29 +81,25 @@ namespace Spectators.Patches
         static bool patchSpectatorsClientChat(ref string chatMessage, ref string nameOfUserWhoTyped)
         {
             int chatLength = chatMessage.Length;
-            if (chatMessage.Contains(key1))
+            // Spectator Commands Filter
+            if (chatMessage.Contains(key1) || chatMessage.Contains(key2))
             {
+                // User Filter
                 if (nameOfUserWhoTyped != hud.playersManager.localPlayerController.playerUsername)
                 {
                     hud.lastChatMessage = chatMessage;
                     return false;
                 }
-                else
+                // Local User - Add Spectator
+                else if (chatMessage.Contains(key1))
                 {
                     specList.Add(chatMessage.Substring(0, chatLength - (key1.Length)));
                     mls.LogInfo("Adding Spectator: " + chatMessage.Substring(0, chatLength - (key1.Length)));
                     hud.lastChatMessage = chatMessage;
                     return false;
                 }
-            }
-            else if (chatMessage.Contains(key2))
-            {
-                if (nameOfUserWhoTyped != HUDManager.Instance.playersManager.localPlayerController.playerUsername)
-                {
-                    hud.lastChatMessage = chatMessage;
-                    return false;
-                }
-                else
+                // Local User - Remove Spectator
+                else 
                 {
                     specList.Remove(chatMessage.Substring(0, chatLength - (key2.Length)));
                     mls.LogInfo("Removing Spectator: " + chatMessage.Substring(0, chatLength - (key2.Length)));
@@ -108,13 +107,23 @@ namespace Spectators.Patches
                     return false;
                 }
             }
-            // Change Spectators Color
-            else if (chatMessage.Contains("/specColor"))
+            // Change Spectators and Header Color
+            else if (chatMessage.Contains("/specColor") || chatMessage.Contains("/headerColor"))
             {
-                string tempColor = chatMessage.Substring(11, chatLength - 11);
-                if (tempColor.Contains('#'))
+                
+                if (chatMessage.Contains('#'))
                 {
-                    specColor = tempColor;
+                    if (chatMessage.Contains("/specColor"))
+                    {
+                        string tempColor = chatMessage.Substring(11, chatLength-11);
+                        specColor = tempColor;
+                    }
+                    else 
+                    {
+                        string tempColor = chatMessage.Substring(13, chatLength-13);
+                        headerColor = tempColor;
+                    }
+                    
                 }
                 hud.lastChatMessage = chatMessage;
                 return false;
@@ -126,6 +135,7 @@ namespace Spectators.Patches
                 hud.lastChatMessage = chatMessage;
                 return false;
             }
+            // Message Passthrough
             else
             {
                 return true;
@@ -137,17 +147,29 @@ namespace Spectators.Patches
         [HarmonyPatch("Update")]
         static void modifyWeightText() 
         {
-            specBox.text = "<size=12><color="+headerColor+">Spectators:      </color></size>\n";
-            if (GameNetworkManager.Instance.localPlayerController.isPlayerDead || hud == null) 
-            {
-                specList.RemoveRange(0,specList.Count);
-                specBox.text = "";
-                return;
+            // Spectator Display Toggle
+            if (specBox == null) 
+            { 
+                return; 
             }
-            for (int i = 0; i < specList.Count; i++)
+            else
             {
-                string specText = specBox.text;
-                specBox.text = string.Format(specText + "<size=10><color="+specColor+">{0}</color></size>\n", nameSpacer(specList[i]));
+                ColorUtility.TryParseHtmlString(specColor, out Color textColor);
+                specBox.color = textColor;
+                specBox.text = "<color=" + headerColor + ">" + "Spectators:</color>\n";
+                if (GameNetworkManager.Instance.localPlayerController.isPlayerDead)
+                {
+
+                    specList.RemoveRange(0, specList.Count);
+                    specBox.text = "";
+                    return;
+                }
+                // Populate Spectator List
+                for (int i = 0; i < specList.Count; i++)
+                {
+                    string specText = specBox.text;
+                    specBox.text = string.Format(specText + "<size=6f><color=" + specColor + "> {0}</color></size>\n", nameSpacer(specList[i]));
+                }
             }
         }
 
@@ -162,16 +184,21 @@ namespace Spectators.Patches
         // Adds spectator list to UI elements 
         [HarmonyPostfix]
         [HarmonyPatch("Start")]
-        static void createSpecElem() 
+        static void createSpecElem(ref HUDManager __instance) 
         {
-            Font arial;
-            arial = (Font)Resources.GetBuiltinResource(typeof(Font), "Arial.ttf");
-            specBox = hud.HUDContainer.AddComponent<UnityEngine.UI.Text>();
-            specBox.font = arial;
-            specBox.fontSize = 12;
-            specBox.alignment = TextAnchor.MiddleRight;
-            specBox.maskable = false;
-            specBox.GetComponent<RectTransform>().sizeDelta = new Vector2(200, 800);
+            GameObject spec = new GameObject("SpectatorList");
+            spec.AddComponent<RectTransform>();
+            TextMeshProUGUI specBoxTemp = spec.AddComponent<TextMeshProUGUI>();
+            RectTransform rectTransform = specBoxTemp.rectTransform;
+            rectTransform.SetParent(__instance.PTTIcon.transform, false);
+            rectTransform.anchoredPosition = new Vector2(460f, -90f);
+            specBoxTemp.font = __instance.controlTipLines[0].font;
+            specBoxTemp.fontSize = 7f;
+            specBoxTemp.enabled = true;
+            specBoxTemp.color = Color.white;
+            specBoxTemp.text = "Spectators: \n";
+            specBoxTemp.overflowMode = (TextOverflowModes)0;
+            specBox = specBoxTemp;
             mls.LogInfo("Spectator UI Element Loaded...");
         }
 
@@ -189,5 +216,6 @@ namespace Spectators.Patches
             }
             return tempName;
         }
+
     }
 }
