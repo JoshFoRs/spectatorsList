@@ -4,6 +4,7 @@
 Shows a spectator list so you can see who's watching. All players in game must have the mod in order for it to work.
 
 /specColor #000000 in chat to change the color of the spectators names.
+/specHeader #000000 in chat to change the color of the "Spectators:" text.
 
 ## Other Info
 
